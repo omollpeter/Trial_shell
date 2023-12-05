@@ -25,5 +25,7 @@ int run_shell(char **argv, char **env);
 int check_and(char *cmd);
 int check_or(char *cmd);
 int check_semi_colon(char *cmd);
+int execute_or(char *cmd, char **env);
+int execute_and(char *cmd, char **env);
 
 #endif

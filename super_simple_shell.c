@@ -218,41 +218,41 @@ int run_shell(char **argv, char **env)
 	int found;
 	char *dirs_in_PATH, *path;
 	if (strcmp(argv[0], "exit") == 0 && argv[1] != NULL)
-		{
-			exit(atoi(argv[1]));
-		}
-		else if(strcmp(argv[0], "exit") == 0)
-			exit(0);
+	{
+		exit(atoi(argv[1]));
+	}
+	else if(strcmp(argv[0], "exit") == 0)
+		exit(0);
 
-		if(strcmp(argv[0], "env") == 0)
-			env_vars(env);
+	if(strcmp(argv[0], "env") == 0)
+		env_vars(env);
 
-		found = check_command_in_curdir(argv[0]);
-		if (found == 0)
+	found = check_command_in_curdir(argv[0]);
+	if (found == 0)
+	{
+		if (executor(argv) == 0)
+			return (0);
+		else
+			return (-1);
+	}	
+	else
+	{
+		dirs_in_PATH = getenv("PATH");
+		path = path_to_executable(dirs_in_PATH, argv[0]);
+		if (path)
 		{
+			argv = modify_cmd(argv, path);
 			if (executor(argv) == 0)
 				return (0);
 			else
 				return (-1);
-		}	
+		}
 		else
 		{
-			dirs_in_PATH = getenv("PATH");
-			path = path_to_executable(dirs_in_PATH, argv[0]);
-			if (path)
-			{
-				argv = modify_cmd(argv, path);
-				if (executor(argv) == 0)
-					return (0);
-				else
-					return (-1);
-			}
-			else
-			{
-				perror(argv[0]);
-				return (-1);
-			}
+			perror(argv[0]);
+			return (-1);
 		}
+	}
 }
 
 int check_and(char *cmd)
@@ -261,7 +261,7 @@ int check_and(char *cmd)
 
 	for (i = 0; cmd[i]; i++)
 	{
-		if (cmd[i] == ';')
+		if (cmd[i] == '&' && cmd[i + 1] == '&')
 			and++;
 	}	
 	return (and);
@@ -273,7 +273,7 @@ int check_or(char *cmd)
 
 	for (i = 0; cmd[i]; i++)
 	{
-		if (cmd[i] == ';')
+		if (cmd[i] == '|' && cmd[i + 1] == '|')
 			or++;
 	}	
 	return (or);
@@ -291,22 +291,46 @@ int check_semi_colon(char *cmd)
 	return (colon);
 }
 
-int execute_and(char *cmd)
+int execute_and(char *cmd, char **env)
 {
-	int and;
+	int i = 0, result;
+	char **argv, **arr_argv;
 
-	and = check_and(cmd);
+	arr_argv = parser(cmd, "&&");
 
-	if (and)
+	while (arr_argv[i])
 	{
-
+		argv = parser(arr_argv[i], " \n");
+		result = run_shell(argv, env);
+		if (result == -1)
+			return(0);
+		i++;
 	}
+	return (0);
+}
+
+int execute_or(char *cmd, char **env)
+{
+	int i = 0, result;
+	char **argv, **arr_argv;
+
+	arr_argv = parser(cmd, "||");
+
+	while (arr_argv[i])
+	{
+		argv = parser(arr_argv[i], " \n");
+		result = run_shell(argv, env);
+		if (result == 0)
+			return(0);
+		i++;
+	}
+	return (0);
 }
 
 int main(int __attribute__((unused))ac, char __attribute__((unused))**av, char **env)
 {
 	char *str, **argv;
-	int chains = 0, or = 0, and = 0, i; 
+	int chains = 0, or, and, i; 
 
 	while (isatty(0))
 	{
@@ -320,15 +344,35 @@ int main(int __attribute__((unused))ac, char __attribute__((unused))**av, char *
 			i = 0;
 			while (arr_argv[i])
 			{
-				argv = parser(arr_argv[i], " \n");
-				run_shell(argv, env);
+				and = check_and(arr_argv[i]);
+				or = check_or(arr_argv[i]);
+
+				if (and)
+					execute_and(arr_argv[i], env);
+				else if (or)
+					execute_or(arr_argv[i], env);
+				else
+				{
+					argv = parser(arr_argv[i], " \n");
+					run_shell(argv, env);
+				}
 				i++;
 			}
 		}
 		else
 		{
-			argv = parser(str, " \n");
-			run_shell(argv, env);
+			and = check_and(str);
+			or = check_or(str);
+
+			if (and)
+				execute_and(str, env);
+			else if (or)
+				execute_or(str, env);
+			else
+			{
+				argv = parser(str, " \n");
+				run_shell(argv, env);
+			}
 		}
 	}
 
